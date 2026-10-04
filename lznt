@@ -1,34 +1,14 @@
--- lorez tags
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
-local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app/"
-local FIREBASE_SECRET = ""
-local PING_SECONDS = 8
-local FRESH_SECONDS = 20
-local SCRIPT_ID = "Kxnzie_nametag_v1"
-
-local CUSTOM_TAGS = {
-    ["kryliczx"] = {
-        title    = "kxnzie",
-        subtitle = "@kryliczx",
-        color1   = "#000000",
-        color2   = "#ffffff",
-        image    = "https://i.ibb.co/v4RLgTjH/Damon-Salvatore.jpg",
-        imageFile = "Damon-Salvatore.jpg",
-        logo     = "none",
-        logoFile = "none",
-        textAlign = "left",
-    },
-    -- i add more here so i remember
-}
+local WEBSITE_TAGS_URL = "https://lorezmain.kenzielimonn.workers.dev/tags.json"
+local POLL_INTERVAL = 10
 
 local DEFAULT_COLOR1 = "#8c00ffff"
 local DEFAULT_COLOR2 = "#ff9100ff"
-local DEFAULT_ALIGN  = "center"
+local DEFAULT_ALIGN  = "left"
 
 local DEFAULT_BG_URL   = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
 local DEFAULT_BG_FILE  = "nametag_bg_default.jpg"
@@ -38,7 +18,6 @@ local DEFAULT_LOGO_FILE = "nametag_logo_default.png"
 local CARD_COLOR = Color3.fromRGB(16, 9, 24)
 local HEIGHT = 2.6
 local TAG_NAME = "__kxnzie_nametag"
-local TOGGLE_NAME = "__kxnzie_nametag_toggle"
 
 local COLLAPSE_DISTANCE = 50
 local FULL_W, FULL_H, SQUARE = 150, 50, 50
@@ -57,9 +36,6 @@ local env = (getgenv and getgenv()) or _G
 if type(env[TAG_NAME]) == "function" then
     pcall(env[TAG_NAME])
 end
-
--- nametags on/off (driven by the hub's Settings toggle via env[TOGGLE_NAME])
-local enabled = true
 
 local assetCache = {}
 
@@ -160,7 +136,6 @@ local function buildTag(head, data, target)
     gui.Size = UDim2.new(0, FULL_W, 0, FULL_H)
     gui.StudsOffsetWorldSpace = Vector3.new(0, HEIGHT, 0)
     gui.Active = true
-    gui.Enabled = enabled
     gui.Parent = player:WaitForChild("PlayerGui")
 
     local card = Instance.new("Frame")
@@ -342,56 +317,9 @@ local function setTag(target, data)
     if target.Character then attach(target.Character) end
 end
 
-local function myOwnTag()
-    local custom = CUSTOM_TAGS[player.Name]
-    if custom then return custom end
-    return {
-        title    = player.DisplayName,
-        subtitle = "@" .. player.Name,
-        color1   = DEFAULT_COLOR1,
-        color2   = DEFAULT_COLOR2,
-        textAlign = DEFAULT_ALIGN,
-    }
-end
-
-local MY_TAG = myOwnTag()
-setTag(player, MY_TAG)
-
-local function firebasePath(jobId, userId)
-    local base = FIREBASE_URL .. "/nametags/" .. HttpService:UrlEncode(jobId)
-    if userId then
-        base = base .. "/" .. tostring(userId)
-    end
-    base = base .. ".json"
-    if FIREBASE_SECRET ~= "" then
-        base = base .. "?auth=" .. FIREBASE_SECRET
-    end
-    return base
-end
-
-local function firebasePut(jobId, userId, data)
-    local url = firebasePath(jobId, userId)
-    local body = HttpService:JSONEncode(data)
-
-    local requestFunc = (syn and syn.request) or http_request or (fluxus and fluxus.request) or request
-    if requestFunc then
-        local ok = pcall(function()
-            return requestFunc({
-                Url = url,
-                Method = "PUT",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body = body,
-            })
-        end)
-        return ok
-    end
-    return false
-end
-
-local function firebaseGet(jobId)
-    local url = firebasePath(jobId)
+local function fetchWebsiteTags()
     local ok, result = pcall(function()
-        return game:HttpGet(url)
+        return game:HttpGet(WEBSITE_TAGS_URL)
     end)
     if not ok or not result or result == "null" then return {} end
     local success, decoded = pcall(function()
@@ -401,87 +329,42 @@ local function firebaseGet(jobId)
 end
 
 local running = true
-local freshStrikes = {}
 
 task.spawn(function()
     while running do
         pcall(function()
-            -- toggled off: stop broadcasting and polling
-            if not enabled then return end
+            local websiteTags = fetchWebsiteTags()
+            
+            for _, other in ipairs(Players:GetPlayers()) do
+                local username = other.Name
+                local webData = websiteTags[username]
 
-            local jobId = (game.JobId ~= "" and game.JobId) or tostring(game.PlaceId)
+                local tagConfig = webData or {
+                    title = other.DisplayName,
+                    subtitle = "@" .. other.Name,
+                    color1 = DEFAULT_COLOR1,
+                    color2 = DEFAULT_COLOR2,
+                    image = DEFAULT_BG_URL,
+                    logo = DEFAULT_LOGO_URL,
+                    textAlign = DEFAULT_ALIGN,
+                }
 
-            firebasePut(jobId, player.UserId, {
-                id = SCRIPT_ID,
-                t = cleanText(MY_TAG.title, "") ~= "" and cleanText(MY_TAG.title, "") or player.DisplayName,
-                s = cleanText(MY_TAG.subtitle, "") ~= "" and cleanText(MY_TAG.subtitle, "") or ("@" .. player.Name),
-                c1 = tostring(MY_TAG.color1),
-                c2 = tostring(MY_TAG.color2),
-                img = MY_TAG.image,
-                imgF = MY_TAG.imageFile,
-                logo = MY_TAG.logo,
-                logoF = MY_TAG.logoFile,
-                align = MY_TAG.textAlign,
-                lastSeen = os.time(),
-            })
-
-            local users = firebaseGet(jobId)
-            local now = os.time()
-
-            local broadcasting = {}
-            for userIdStr, data in pairs(users) do
-                local uid = tonumber(userIdStr)
-                if uid and type(data) == "table"
-                    and data.id == SCRIPT_ID
-                    and data.lastSeen
-                    and (now - data.lastSeen) <= FRESH_SECONDS
-                    and uid ~= player.UserId
-                then
-                    local other = Players:GetPlayerByUserId(uid)
-                    if other then
-                        broadcasting[other] = data
-                    end
-                end
-            end
-
-            for other, data in pairs(broadcasting) do
-                freshStrikes[other] = (freshStrikes[other] or 0) + 1
-
-                if freshStrikes[other] >= 2 then
-                    local custom = CUSTOM_TAGS[other.Name]
-                    setTag(other, custom or {
-                        title    = (data.t and data.t ~= "") and data.t or other.DisplayName,
-                        subtitle = (data.s and data.s ~= "") and data.s or ("@" .. other.Name),
-                        color1   = data.c1,
-                        color2   = data.c2,
-                        image    = data.img,
-                        imageFile = data.imgF,
-                        logo     = data.logo,
-                        logoFile = data.logoF,
-                        textAlign = data.align or "center",
-                    })
-                end
-            end
-
-            for other in pairs(freshStrikes) do
-                if not broadcasting[other] then
-                    freshStrikes[other] = nil
-                end
-            end
-
-            for target in pairs(tags) do
-                if target ~= player and not broadcasting[target] then
-                    removeTag(target)
-                end
+                setTag(other, {
+                    title    = tagConfig.title or other.DisplayName,
+                    subtitle = tagConfig.subtitle or ("@" .. other.Name),
+                    color1   = tagConfig.color1 or DEFAULT_COLOR1,
+                    color2   = tagConfig.color2 or DEFAULT_COLOR2,
+                    image    = tagConfig.image or DEFAULT_BG_URL,
+                    logo     = tagConfig.logo or DEFAULT_LOGO_URL,
+                    textAlign = tagConfig.textAlign or DEFAULT_ALIGN,
+                })
             end
         end)
-        task.wait(PING_SECONDS)
+        task.wait(POLL_INTERVAL)
     end
 end)
 
 local animConnection = RunService.Heartbeat:Connect(function()
-    if not enabled then return end
-
     local offset = ((os.clock() * 0.6) % 2) - 1
     local camera = workspace.CurrentCamera
 
@@ -518,34 +401,15 @@ local animConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
-local removingConnection = Players.PlayerRemoving:Connect(function(leaving)
+Players.PlayerRemoving:Connect(function(leaving)
     removeTag(leaving)
-    freshStrikes[leaving] = nil
 end)
-
--- toggle: env.__kxnzie_nametag_toggle(true/false)
-env[TOGGLE_NAME] = function(state)
-    enabled = state and true or false
-
-    local count = 0
-    for _, child in ipairs(player:WaitForChild("PlayerGui"):GetChildren()) do
-        if child.Name == TAG_NAME and child:IsA("BillboardGui") then
-            child.Enabled = enabled
-            count = count + 1
-        end
-    end
-    print("lorez nametags " .. (enabled and "on" or "off") .. " (" .. count .. " tags)")
-end
 
 env[TAG_NAME] = function()
     running = false
-    enabled = false
     animConnection:Disconnect()
-    removingConnection:Disconnect()
     for target in pairs(tags) do
         removeTag(target)
     end
     table.clear(collapsing)
-    table.clear(freshStrikes)
-    env[TOGGLE_NAME] = nil
 end
