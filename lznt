@@ -1,0 +1,265 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+
+local MY_TAG = {
+    title = "lorez user", 
+    subtitle = player.DisplayName, 
+    color1 = "#9646FF", 
+    color2 = "#FF7A18", 
+}
+
+local SERVER_URL = "https://lorezdatabasemain.kenzielimonn.workers.dev"
+local PING_SECONDS = 10
+
+local CARD_COLOR = Color3.fromRGB(16, 9, 24)
+local HEIGHT = 2.6
+local LOGO_URL = "https://i.ibb.co/hFRS0QcP/l-gogo.png"
+local LOGO_FILE = "nametag_logo.png"
+local BG_URL = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
+local BG_FILE = "nametag_bg.jpg"
+local TAG_NAME = "__kxnzie_nametag"
+
+local env = (getgenv and getgenv()) or _G
+if type(env[TAG_NAME]) == "function" then
+    pcall(env[TAG_NAME])
+end
+
+local function loadAsset(file, url)
+
+    local sum = 0
+    for i = 1, #url do sum = (sum * 31 + string.byte(url, i)) % 1000000007 end
+    file = sum .. "_" .. file
+    local ok, result = pcall(function()
+        if not (isfile and writefile and getcustomasset) then return nil end
+        if not isfile(file) then
+            writefile(file, game:HttpGet(url))
+        end
+        return getcustomasset(file)
+    end)
+    if ok then return result end
+    return nil
+end
+local logoAsset = loadAsset(LOGO_FILE, LOGO_URL)
+local bgAsset = loadAsset(BG_FILE, BG_URL)
+
+local function parseColor(hex, fallback)
+    local ok, color = pcall(Color3.fromHex, tostring(hex))
+    if ok and color then return color end
+    return fallback
+end
+
+local function cleanText(value, fallback)
+    if type(value) ~= "string" then return fallback end
+    return string.sub(value, 1, 24)
+end
+
+local gradients = {}
+local tags = {}
+
+local function addGradient(parent, c1, c2)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(0.5, c2),
+        ColorSequenceKeypoint.new(1, c1),
+    })
+    gradient.Parent = parent
+    gradients[gradient] = true
+    return gradient
+end
+
+local function buildTag(head, data)
+    local c1 = parseColor(data.color1, Color3.fromRGB(150, 70, 255))
+    local c2 = parseColor(data.color2, Color3.fromRGB(255, 122, 24))
+    local title = cleanText(data.title, "")
+    local subtitle = cleanText(data.subtitle, "")
+
+    local gui = Instance.new("BillboardGui")
+    gui.Name = TAG_NAME
+    gui.Adornee = head
+    gui.AlwaysOnTop = true
+    gui.LightInfluence = 0
+    gui.Size = UDim2.new(0, 150, 0, 50)
+    gui.StudsOffsetWorldSpace = Vector3.new(0, HEIGHT, 0)
+    gui.Parent = head
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 1, 0)
+    card.BackgroundColor3 = CARD_COLOR
+    card.BackgroundTransparency = bgAsset and 1 or 0.1
+    card.BorderSizePixel = 0
+    card.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = card
+
+    if bgAsset then
+        local bg = Instance.new("ImageLabel")
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundTransparency = 1
+        bg.Image = bgAsset
+        bg.ScaleType = Enum.ScaleType.Crop
+        bg.ZIndex = 1
+        bg.Parent = card
+        local bgCorner = Instance.new("UICorner")
+        bgCorner.CornerRadius = UDim.new(0, 10)
+        bgCorner.Parent = bg
+    end
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 2
+    stroke.Parent = card
+    addGradient(stroke, c1, c2)
+
+    local textLeft = 0.4
+    if logoAsset then
+        local logo = Instance.new("ImageLabel")
+        logo.BackgroundTransparency = 1
+        logo.AnchorPoint = Vector2.new(0, 0.5)
+        logo.Position = UDim2.new(0, 5, 0.5, 0)
+        logo.Size = UDim2.new(0, 46, 0, 46)
+        logo.Image = logoAsset
+        logo.ScaleType = Enum.ScaleType.Fit
+        logo.ZIndex = 2
+        logo.Parent = card
+        textLeft = 0.58
+    end
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.AnchorPoint = Vector2.new(0.5, 0)
+    titleLabel.Position = UDim2.new(textLeft, 0, 0, subtitle ~= "" and 9 or 16)
+    titleLabel.Size = UDim2.new(0, 110, 0, 18)
+    titleLabel.Text = title
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextScaled = true
+    titleLabel.TextStrokeTransparency = 1
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+    titleLabel.ZIndex = 2
+    titleLabel.Parent = card
+    addGradient(titleLabel, c1, c2)
+
+    if subtitle ~= "" then
+        local sub = Instance.new("TextLabel")
+        sub.BackgroundTransparency = 1
+        sub.AnchorPoint = Vector2.new(0.5, 0)
+        sub.Position = UDim2.new(textLeft, 0, 0, 27)
+        sub.Size = UDim2.new(0, 110, 0, 11)
+        sub.Text = subtitle
+        sub.TextColor3 = Color3.fromRGB(255, 255, 255)
+        sub.Font = Enum.Font.Gotham
+        sub.TextScaled = true
+        sub.TextStrokeTransparency = 1
+        sub.TextXAlignment = Enum.TextXAlignment.Center
+        sub.ZIndex = 2
+        sub.Parent = card
+        addGradient(sub, c1, c2)
+    end
+
+    return gui
+end
+
+local function removeTag(target)
+    local entry = tags[target]
+    if not entry then return end
+    tags[target] = nil
+    if entry.conn then entry.conn:Disconnect() end
+    if entry.gui then entry.gui:Destroy() end
+end
+
+local function dataKey(data)
+    return table.concat({ tostring(data.title), tostring(data.subtitle), tostring(data.color1), tostring(data.color2) }, "|")
+end
+
+local function setTag(target, data)
+    local entry = tags[target]
+    if entry and entry.key == dataKey(data) and entry.gui and entry.gui.Parent then return end
+    removeTag(target)
+
+    local function attach(character)
+        task.spawn(function()
+            local head = character:WaitForChild("Head", 10)
+            if not head or tags[target] == nil then return end
+            local current = tags[target]
+            if current.gui then current.gui:Destroy() end
+            current.gui = buildTag(head, data)
+        end)
+    end
+
+    local newEntry = { key = dataKey(data) }
+    tags[target] = newEntry
+    newEntry.conn = target.CharacterAdded:Connect(attach)
+    if target.Character then attach(target.Character) end
+end
+
+setTag(player, MY_TAG)
+
+local running = true
+
+local animConnection = RunService.Heartbeat:Connect(function()
+    local offset = ((os.clock() * 0.6) % 2) - 1
+    for gradient in pairs(gradients) do
+        if gradient.Parent then
+            gradient.Offset = Vector2.new(offset, 0)
+        else
+            gradients[gradient] = nil
+        end
+    end
+end)
+
+local leavingConnection = Players.PlayerRemoving:Connect(function(leaving)
+    removeTag(leaving)
+end)
+
+if SERVER_URL ~= "" then
+    task.spawn(function()
+        while running do
+            pcall(function()
+                local url = string.format(
+                    "%s/ping?job=%s&uid=%d&t=%s&s=%s&c1=%s&c2=%s",
+                    SERVER_URL,
+                    HttpService:UrlEncode(game.JobId ~= "" and game.JobId or tostring(game.PlaceId)),
+                    player.UserId,
+                    HttpService:UrlEncode(cleanText(MY_TAG.title, "")),
+                    HttpService:UrlEncode(cleanText(MY_TAG.subtitle, "")),
+                    HttpService:UrlEncode(tostring(MY_TAG.color1)),
+                    HttpService:UrlEncode(tostring(MY_TAG.color2))
+                )
+                local users = HttpService:JSONDecode(game:HttpGet(url))
+                local seen = {}
+                for userId, data in pairs(users) do
+                    local other = Players:GetPlayerByUserId(tonumber(userId) or 0)
+                    if other and other ~= player and type(data) == "table" then
+                        seen[other] = true
+                        setTag(other, {
+                            title = (data.t ~= "" and data.t) or other.DisplayName,
+                            subtitle = data.s,
+                            color1 = data.c1,
+                            color2 = data.c2,
+                        })
+                    end
+                end
+                for target in pairs(tags) do
+                    if target ~= player and not seen[target] then
+                        removeTag(target)
+                    end
+                end
+            end)
+            task.wait(PING_SECONDS)
+        end
+    end)
+end
+
+env[TAG_NAME] = function()
+    running = false
+    animConnection:Disconnect()
+    leavingConnection:Disconnect()
+    for target in pairs(tags) do
+        removeTag(target)
+    end
+end
