@@ -10,8 +10,9 @@ local MY_TAG = {
     color2 = "#FF7A18",
 }
 
-local SERVER_URL = "https://lorezdatabasemain.kenzielimonn.workers.dev"
-local PING_SECONDS = 10
+local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app"
+local FIREBASE_SECRET = ""
+local PING_SECONDS = 8
 
 local CARD_COLOR = Color3.fromRGB(16, 9, 24)
 local HEIGHT = 2.6
@@ -29,7 +30,6 @@ if type(env[TAG_NAME]) == "function" then
 end
 
 local function loadAsset(file, url)
-
     local sum = 0
     for i = 1, #url do sum = (sum * 31 + string.byte(url, i)) % 1000000007 end
     file = sum .. "_" .. file
@@ -43,6 +43,7 @@ local function loadAsset(file, url)
     if ok then return result end
     return nil
 end
+
 local logoAsset = loadAsset(LOGO_FILE, LOGO_URL)
 local bgAsset = loadAsset(BG_FILE, BG_URL)
 
@@ -155,8 +156,8 @@ local function buildTag(head, data, target)
         logo.Parent = card
         textLeft = 0.58
     end
-    local texts = {}
 
+    local texts = {}
     local titleLabel = Instance.new("TextLabel")
     titleLabel.BackgroundTransparency = 1
     titleLabel.AnchorPoint = Vector2.new(0.5, 0)
@@ -249,20 +250,8 @@ local animConnection = RunService.Heartbeat:Connect(function()
     local camera = workspace.CurrentCamera
     for gui, info in pairs(collapsing) do
         if not gui.Parent then
-            if target ~= player then
-        local click = Instance.new("TextButton")
-        click.Size = UDim2.new(1, 0, 1, 0)
-        click.BackgroundTransparency = 1
-        click.Text = ""
-        click.ZIndex = 5
-        click.Parent = card
-        click.MouseButton1Click:Connect(function()
-            teleportBehind(target)
-        end)
-    end
-
-    collapsing[gui] = nil
-        elseif camera then
+            collapsing[gui] = nil
+        elseif camera and info.head and info.head.Parent then
             local distance = (camera.CFrame.Position - info.head.Position).Magnitude
             local a = distance >= COLLAPSE_DISTANCE and 1 or 0
             gui.Size = UDim2.new(0, FULL_W + (SQUARE - FULL_W) * a, 0, FULL_H)
@@ -285,44 +274,95 @@ local leavingConnection = Players.PlayerRemoving:Connect(function(leaving)
     removeTag(leaving)
 end)
 
-if SERVER_URL ~= "" then
-    task.spawn(function()
-        while running do
-            pcall(function()
-                local url = string.format(
-                    "%s/ping?job=%s&uid=%d&t=%s&s=%s&c1=%s&c2=%s",
-                    SERVER_URL,
-                    HttpService:UrlEncode(game.JobId ~= "" and game.JobId or tostring(game.PlaceId)),
-                    player.UserId,
-                    HttpService:UrlEncode(cleanText(MY_TAG.title, "")),
-                    HttpService:UrlEncode(cleanText(MY_TAG.subtitle, "")),
-                    HttpService:UrlEncode(tostring(MY_TAG.color1)),
-                    HttpService:UrlEncode(tostring(MY_TAG.color2))
-                )
-                local users = HttpService:JSONDecode(game:HttpGet(url))
-                local seen = {}
-                for userId, data in pairs(users) do
-                    local other = Players:GetPlayerByUserId(tonumber(userId) or 0)
-                    if other and other ~= player and type(data) == "table" then
-                        seen[other] = true
-                        setTag(other, {
-                            title = (data.t ~= "" and data.t) or other.DisplayName,
-                            subtitle = data.s,
-                            color1 = data.c1,
-                            color2 = data.c2,
-                        })
-                    end
-                end
-                for target in pairs(tags) do
-                    if target ~= player and not seen[target] then
-                        removeTag(target)
-                    end
-                end
-            end)
-            task.wait(PING_SECONDS)
-        end
-    end)
+local function firebasePath(jobId, userId)
+    local base = FIREBASE_URL .. "/nametags/" .. HttpService:UrlEncode(jobId)
+    if userId then
+        base = base .. "/" .. tostring(userId)
+    end
+    base = base .. ".json"
+    if FIREBASE_SECRET ~= "" then
+        base = base .. "?auth=" .. FIREBASE_SECRET
+    end
+    return base
 end
+
+local function firebasePut(jobId, userId, data)
+    local url = firebasePath(jobId, userId)
+    local body = HttpService:JSONEncode(data)
+
+    local requestFunc = (syn and syn.request) or http_request or (fluxus and fluxus.request) or request
+    if requestFunc then
+        requestFunc({
+            Url = url,
+            Method = "PUT",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body
+        })
+    else
+
+        pcall(function()
+            game:HttpGet(url)
+        end)
+    end
+end
+
+local function firebaseGet(jobId)
+    local url = firebasePath(jobId)
+    local ok, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not ok or not result or result == "null" then return {} end
+    local success, decoded = pcall(function()
+        return HttpService:JSONDecode(result)
+    end)
+    return (success and type(decoded) == "table") and decoded or {}
+end
+
+task.spawn(function()
+    while running do
+        pcall(function()
+            local jobId = (game.JobId ~= "" and game.JobId) or tostring(game.PlaceId)
+
+            firebasePut(jobId, player.UserId, {
+                t = cleanText(MY_TAG.title, ""),
+                s = cleanText(MY_TAG.subtitle, ""),
+                c1 = tostring(MY_TAG.color1),
+                c2 = tostring(MY_TAG.color2),
+                lastSeen = os.time()
+            })
+
+            local users = firebaseGet(jobId)
+            local seen = {}
+            local now = os.time()
+
+            for userIdStr, data in pairs(users) do
+                local uid = tonumber(userIdStr)
+                if uid and type(data) == "table" then
+
+                    if not data.lastSeen or (now - data.lastSeen) <= 30 then
+                        local other = Players:GetPlayerByUserId(uid)
+                        if other and other ~= player then
+                            seen[other] = true
+                            setTag(other, {
+                                title = (data.t and data.t ~= "" and data.t) or other.DisplayName,
+                                subtitle = data.s or "",
+                                color1 = data.c1,
+                                color2 = data.c2,
+                            })
+                        end
+                    end
+                end
+            end
+
+            for target in pairs(tags) do
+                if target ~= player and not seen[target] then
+                    removeTag(target)
+                end
+            end
+        end)
+        task.wait(PING_SECONDS)
+    end
+end)
 
 env[TAG_NAME] = function()
     running = false
