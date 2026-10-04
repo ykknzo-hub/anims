@@ -5,11 +5,11 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
-local FIREBASE_URL = "https://krimsonx-nametags-default-rtdb.firebaseio.com/"
+local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app/"
 local FIREBASE_SECRET = ""
 local PING_SECONDS = 8
 local FRESH_SECONDS = 20
-local SCRIPT_ID = "krimsonx_nametag_v1"
+local SCRIPT_ID = "Kxnzie_nametag_v1"
 
 local CUSTOM_TAGS = {
     ["kryliczx"] = {
