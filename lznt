@@ -4,10 +4,10 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
 local MY_TAG = {
-    title = "lorez user", 
-    subtitle = player.DisplayName, 
-    color1 = "#9646FF", 
-    color2 = "#FF7A18", 
+    title = "lorez user",
+    subtitle = player.DisplayName,
+    color1 = "#9646FF",
+    color2 = "#FF7A18",
 }
 
 local SERVER_URL = "https://lorezdatabasemain.kenzielimonn.workers.dev"
@@ -20,6 +20,8 @@ local LOGO_FILE = "nametag_logo.png"
 local BG_URL = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
 local BG_FILE = "nametag_bg.jpg"
 local TAG_NAME = "__kxnzie_nametag"
+local COLLAPSE_DISTANCE = 50
+local FULL_W, FULL_H, SQUARE = 150, 50, 50
 
 local env = (getgenv and getgenv()) or _G
 if type(env[TAG_NAME]) == "function" then
@@ -56,6 +58,7 @@ local function cleanText(value, fallback)
 end
 
 local gradients = {}
+local collapsing = {}
 local tags = {}
 
 local function addGradient(parent, c1, c2)
@@ -70,7 +73,15 @@ local function addGradient(parent, c1, c2)
     return gradient
 end
 
-local function buildTag(head, data)
+local function teleportBehind(target)
+    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local theirRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    if myRoot and theirRoot then
+        myRoot.CFrame = theirRoot.CFrame * CFrame.new(0, 0, 3)
+    end
+end
+
+local function buildTag(head, data, target)
     local c1 = parseColor(data.color1, Color3.fromRGB(150, 70, 255))
     local c2 = parseColor(data.color2, Color3.fromRGB(255, 122, 24))
     local title = cleanText(data.title, "")
@@ -81,15 +92,17 @@ local function buildTag(head, data)
     gui.Adornee = head
     gui.AlwaysOnTop = true
     gui.LightInfluence = 0
-    gui.Size = UDim2.new(0, 150, 0, 50)
+    gui.Size = UDim2.new(0, FULL_W, 0, FULL_H)
     gui.StudsOffsetWorldSpace = Vector3.new(0, HEIGHT, 0)
-    gui.Parent = head
+    gui.Active = true
+    gui.Parent = player:WaitForChild("PlayerGui")
 
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, 0, 1, 0)
     card.BackgroundColor3 = CARD_COLOR
     card.BackgroundTransparency = bgAsset and 1 or 0.1
     card.BorderSizePixel = 0
+    card.ClipsDescendants = true
     card.Parent = gui
 
     local corner = Instance.new("UICorner")
@@ -116,8 +129,9 @@ local function buildTag(head, data)
     addGradient(stroke, c1, c2)
 
     local textLeft = 0.4
+    local logo
     if logoAsset then
-        local logo = Instance.new("ImageLabel")
+        logo = Instance.new("ImageLabel")
         logo.BackgroundTransparency = 1
         logo.AnchorPoint = Vector2.new(0, 0.5)
         logo.Position = UDim2.new(0, 5, 0.5, 0)
@@ -127,7 +141,21 @@ local function buildTag(head, data)
         logo.ZIndex = 2
         logo.Parent = card
         textLeft = 0.58
+    else
+        logo = Instance.new("TextLabel")
+        logo.BackgroundTransparency = 1
+        logo.AnchorPoint = Vector2.new(0, 0.5)
+        logo.Position = UDim2.new(0, 5, 0.5, 0)
+        logo.Size = UDim2.new(0, 46, 0, 46)
+        logo.Text = "L"
+        logo.TextColor3 = Color3.fromRGB(255, 255, 255)
+        logo.Font = Enum.Font.GothamBold
+        logo.TextScaled = true
+        logo.ZIndex = 2
+        logo.Parent = card
+        textLeft = 0.58
     end
+    local texts = {}
 
     local titleLabel = Instance.new("TextLabel")
     titleLabel.BackgroundTransparency = 1
@@ -143,6 +171,7 @@ local function buildTag(head, data)
     titleLabel.ZIndex = 2
     titleLabel.Parent = card
     addGradient(titleLabel, c1, c2)
+    table.insert(texts, titleLabel)
 
     if subtitle ~= "" then
         local sub = Instance.new("TextLabel")
@@ -159,8 +188,22 @@ local function buildTag(head, data)
         sub.ZIndex = 2
         sub.Parent = card
         addGradient(sub, c1, c2)
+        table.insert(texts, sub)
     end
 
+    if target ~= player then
+        local click = Instance.new("TextButton")
+        click.Size = UDim2.new(1, 0, 1, 0)
+        click.BackgroundTransparency = 1
+        click.Text = ""
+        click.ZIndex = 5
+        click.Parent = card
+        click.MouseButton1Click:Connect(function()
+            teleportBehind(target)
+        end)
+    end
+
+    collapsing[gui] = { gui = gui, head = head, logo = logo, texts = texts, alpha = 0 }
     return gui
 end
 
@@ -187,7 +230,7 @@ local function setTag(target, data)
             if not head or tags[target] == nil then return end
             local current = tags[target]
             if current.gui then current.gui:Destroy() end
-            current.gui = buildTag(head, data)
+            current.gui = buildTag(head, data, target)
         end)
     end
 
@@ -203,6 +246,32 @@ local running = true
 
 local animConnection = RunService.Heartbeat:Connect(function()
     local offset = ((os.clock() * 0.6) % 2) - 1
+    local camera = workspace.CurrentCamera
+    for gui, info in pairs(collapsing) do
+        if not gui.Parent then
+            if target ~= player then
+        local click = Instance.new("TextButton")
+        click.Size = UDim2.new(1, 0, 1, 0)
+        click.BackgroundTransparency = 1
+        click.Text = ""
+        click.ZIndex = 5
+        click.Parent = card
+        click.MouseButton1Click:Connect(function()
+            teleportBehind(target)
+        end)
+    end
+
+    collapsing[gui] = nil
+        elseif camera then
+            local distance = (camera.CFrame.Position - info.head.Position).Magnitude
+            local a = distance >= COLLAPSE_DISTANCE and 1 or 0
+            gui.Size = UDim2.new(0, FULL_W + (SQUARE - FULL_W) * a, 0, FULL_H)
+            info.logo.Position = UDim2.new(0, 5 + ((SQUARE - 46) / 2 - 5) * a, 0.5, 0)
+            for _, label in ipairs(info.texts) do
+                label.TextTransparency = a
+            end
+        end
+    end
     for gradient in pairs(gradients) do
         if gradient.Parent then
             gradient.Offset = Vector2.new(offset, 0)
@@ -262,4 +331,5 @@ env[TAG_NAME] = function()
     for target in pairs(tags) do
         removeTag(target)
     end
+    table.clear(collapsing)
 end
