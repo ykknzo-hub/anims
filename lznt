@@ -3,49 +3,79 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
-local MY_TAG = {
-    title = "lorez user",
-    subtitle = player.DisplayName,
-    color1 = "#9646FF",
-    color2 = "#FF7A18",
-}
-
 local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app"
 local FIREBASE_SECRET = ""
 local PING_SECONDS = 8
+local FRESH_SECONDS = 20
+local SCRIPT_ID = "kxnzie_nametag_v1"
+
+local CUSTOM_TAGS = {
+    ["kryliczx"] = {
+        title    = "kryliczx",
+        subtitle = "@kryliczx",
+        color1   = "#000000",
+        color2   = "#ffffff",
+        image    = "https://i.ibb.co/v4RLgTjH/Damon-Salvatore.jpg",
+        imageFile = "Damon-Salvatore.jpg",
+        logo     = "none",
+        logoFile = "none",
+        textAlign = "left",
+    },
+    -- i add more here so i remember
+}
+
+local DEFAULT_COLOR1 = "#8c00ffff"
+local DEFAULT_COLOR2 = "#ff9100ff"
+local DEFAULT_ALIGN  = "center"
+
+local DEFAULT_BG_URL   = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
+local DEFAULT_BG_FILE  = "nametag_bg_default.jpg"
+local DEFAULT_LOGO_URL = "https://i.ibb.co/hFRS0QcP/l-gogo.png"
+local DEFAULT_LOGO_FILE = "nametag_logo_default.png"
 
 local CARD_COLOR = Color3.fromRGB(16, 9, 24)
 local HEIGHT = 2.6
-local LOGO_URL = "https://i.ibb.co/hFRS0QcP/l-gogo.png"
-local LOGO_FILE = "nametag_logo.png"
-local BG_URL = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
-local BG_FILE = "nametag_bg.jpg"
 local TAG_NAME = "__kxnzie_nametag"
+
 local COLLAPSE_DISTANCE = 50
 local FULL_W, FULL_H, SQUARE = 150, 50, 50
+
+local LOGO_SIZE = 46
+local LOGO_PAD = 5
+
+local TITLE_HEIGHT = 14
+local SUB_HEIGHT   = 9
+local TITLE_Y_OFFSET = -8
+local SUB_Y_OFFSET   = 9
+
+local LEFT_PADDING = 10
 
 local env = (getgenv and getgenv()) or _G
 if type(env[TAG_NAME]) == "function" then
     pcall(env[TAG_NAME])
 end
 
+local assetCache = {}
+
 local function loadAsset(file, url)
+    if not file or not url or url == "" then return nil end
+    local cacheKey = file .. "|" .. url
+    if assetCache[cacheKey] ~= nil then
+        return assetCache[cacheKey]
+    end
     local sum = 0
     for i = 1, #url do sum = (sum * 31 + string.byte(url, i)) % 1000000007 end
-    file = sum .. "_" .. file
+    local safeFile = sum .. "_" .. file
     local ok, result = pcall(function()
         if not (isfile and writefile and getcustomasset) then return nil end
-        if not isfile(file) then
-            writefile(file, game:HttpGet(url))
+        if not isfile(safeFile) then
+            writefile(safeFile, game:HttpGet(url))
         end
-        return getcustomasset(file)
+        return getcustomasset(safeFile)
     end)
-    if ok then return result end
-    return nil
+    assetCache[cacheKey] = ok and result or false
+    return assetCache[cacheKey] or nil
 end
-
-local logoAsset = loadAsset(LOGO_FILE, LOGO_URL)
-local bgAsset = loadAsset(BG_FILE, BG_URL)
 
 local function parseColor(hex, fallback)
     local ok, color = pcall(Color3.fromHex, tostring(hex))
@@ -56,6 +86,19 @@ end
 local function cleanText(value, fallback)
     if type(value) ~= "string" then return fallback end
     return string.sub(value, 1, 24)
+end
+
+local function normalizeAlign(value)
+    local v = tostring(value or ""):lower()
+    if v == "left" then return "left" end
+    if v == "right" then return "right" end
+    return "center"
+end
+
+local function alignToTextX(align)
+    if align == "left" then return Enum.TextXAlignment.Left end
+    if align == "right" then return Enum.TextXAlignment.Right end
+    return Enum.TextXAlignment.Center
 end
 
 local gradients = {}
@@ -87,6 +130,21 @@ local function buildTag(head, data, target)
     local c2 = parseColor(data.color2, Color3.fromRGB(255, 122, 24))
     local title = cleanText(data.title, "")
     local subtitle = cleanText(data.subtitle, "")
+    local align = normalizeAlign(data.textAlign or DEFAULT_ALIGN)
+
+    local bgAsset = loadAsset(
+        data.imageFile or DEFAULT_BG_FILE,
+        data.image or DEFAULT_BG_URL
+    )
+
+    local logoAsset = nil
+    if data.logo == "none" then
+        logoAsset = nil
+    elseif data.logo and data.logo ~= "" then
+        logoAsset = loadAsset(data.logoFile or DEFAULT_LOGO_FILE, data.logo)
+    else
+        logoAsset = loadAsset(DEFAULT_LOGO_FILE, DEFAULT_LOGO_URL)
+    end
 
     local gui = Instance.new("BillboardGui")
     gui.Name = TAG_NAME
@@ -129,46 +187,62 @@ local function buildTag(head, data, target)
     stroke.Parent = card
     addGradient(stroke, c1, c2)
 
-    local textLeft = 0.4
-    local logo
+    local logo = nil
+    local logoWidth = 0
+
     if logoAsset then
         logo = Instance.new("ImageLabel")
         logo.BackgroundTransparency = 1
         logo.AnchorPoint = Vector2.new(0, 0.5)
-        logo.Position = UDim2.new(0, 5, 0.5, 0)
-        logo.Size = UDim2.new(0, 46, 0, 46)
+        logo.Position = UDim2.new(0, LOGO_PAD, 0.5, 0)
+        logo.Size = UDim2.new(0, LOGO_SIZE, 0, LOGO_SIZE)
         logo.Image = logoAsset
         logo.ScaleType = Enum.ScaleType.Fit
         logo.ZIndex = 2
         logo.Parent = card
-        textLeft = 0.58
-    else
-        logo = Instance.new("TextLabel")
-        logo.BackgroundTransparency = 1
-        logo.AnchorPoint = Vector2.new(0, 0.5)
-        logo.Position = UDim2.new(0, 5, 0.5, 0)
-        logo.Size = UDim2.new(0, 46, 0, 46)
-        logo.Text = "L"
-        logo.TextColor3 = Color3.fromRGB(255, 255, 255)
-        logo.Font = Enum.Font.GothamBold
-        logo.TextScaled = true
-        logo.ZIndex = 2
-        logo.Parent = card
-        textLeft = 0.58
+        logoWidth = LOGO_PAD + LOGO_SIZE + 4
     end
 
+    local TEXT_LEFT  = logoWidth
+    local TEXT_RIGHT = 4
+    local TEXT_ZONE_PIXEL_W = FULL_W - TEXT_LEFT - TEXT_RIGHT
+
+    local xAnchor, xPos
+    if align == "left" then
+        xAnchor = Vector2.new(0, 0.5)
+        xPos = UDim2.new(0, TEXT_LEFT + LEFT_PADDING, 0.5, 0)
+    elseif align == "right" then
+        xAnchor = Vector2.new(1, 0.5)
+        xPos = UDim2.new(0, TEXT_LEFT + TEXT_ZONE_PIXEL_W, 0.5, 0)
+    else
+        xAnchor = Vector2.new(0.5, 0.5)
+        xPos = UDim2.new(0, TEXT_LEFT + TEXT_ZONE_PIXEL_W / 2, 0.5, 0)
+    end
+
+    local labelW = TEXT_ZONE_PIXEL_W
+    if align == "left" then
+        labelW = TEXT_ZONE_PIXEL_W - LEFT_PADDING
+    end
+
+    local textX = alignToTextX(align)
+
     local texts = {}
+
     local titleLabel = Instance.new("TextLabel")
     titleLabel.BackgroundTransparency = 1
-    titleLabel.AnchorPoint = Vector2.new(0.5, 0)
-    titleLabel.Position = UDim2.new(textLeft, 0, 0, subtitle ~= "" and 9 or 16)
-    titleLabel.Size = UDim2.new(0, 110, 0, 18)
+    titleLabel.AnchorPoint = xAnchor
+    titleLabel.Position = UDim2.new(
+        xPos.X.Scale, xPos.X.Offset,
+        0.5, subtitle ~= "" and TITLE_Y_OFFSET or 0
+    )
+    titleLabel.Size = UDim2.new(0, labelW, 0, TITLE_HEIGHT)
     titleLabel.Text = title
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextScaled = true
     titleLabel.TextStrokeTransparency = 1
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+    titleLabel.TextXAlignment = textX
+    titleLabel.TextYAlignment = Enum.TextYAlignment.Center
     titleLabel.ZIndex = 2
     titleLabel.Parent = card
     addGradient(titleLabel, c1, c2)
@@ -177,15 +251,19 @@ local function buildTag(head, data, target)
     if subtitle ~= "" then
         local sub = Instance.new("TextLabel")
         sub.BackgroundTransparency = 1
-        sub.AnchorPoint = Vector2.new(0.5, 0)
-        sub.Position = UDim2.new(textLeft, 0, 0, 27)
-        sub.Size = UDim2.new(0, 110, 0, 11)
+        sub.AnchorPoint = xAnchor
+        sub.Position = UDim2.new(
+            xPos.X.Scale, xPos.X.Offset,
+            0.5, SUB_Y_OFFSET
+        )
+        sub.Size = UDim2.new(0, labelW, 0, SUB_HEIGHT)
         sub.Text = subtitle
         sub.TextColor3 = Color3.fromRGB(255, 255, 255)
         sub.Font = Enum.Font.Gotham
         sub.TextScaled = true
         sub.TextStrokeTransparency = 1
-        sub.TextXAlignment = Enum.TextXAlignment.Center
+        sub.TextXAlignment = textX
+        sub.TextYAlignment = Enum.TextYAlignment.Center
         sub.ZIndex = 2
         sub.Parent = card
         addGradient(sub, c1, c2)
@@ -204,7 +282,13 @@ local function buildTag(head, data, target)
         end)
     end
 
-    collapsing[gui] = { gui = gui, head = head, logo = logo, texts = texts, alpha = 0 }
+    collapsing[gui] = {
+        gui = gui,
+        head = head,
+        logo = logo,
+        hasLogo = logoAsset ~= nil,
+        texts = texts,
+    }
     return gui
 end
 
@@ -217,7 +301,17 @@ local function removeTag(target)
 end
 
 local function dataKey(data)
-    return table.concat({ tostring(data.title), tostring(data.subtitle), tostring(data.color1), tostring(data.color2) }, "|")
+    return table.concat({
+        tostring(data.title),
+        tostring(data.subtitle),
+        tostring(data.color1),
+        tostring(data.color2),
+        tostring(data.image),
+        tostring(data.imageFile),
+        tostring(data.logo),
+        tostring(data.logoFile),
+        tostring(data.textAlign),
+    }, "|")
 end
 
 local function setTag(target, data)
@@ -241,38 +335,20 @@ local function setTag(target, data)
     if target.Character then attach(target.Character) end
 end
 
+local function myOwnTag()
+    local custom = CUSTOM_TAGS[player.Name]
+    if custom then return custom end
+    return {
+        title    = player.DisplayName,
+        subtitle = "@" .. player.Name,
+        color1   = DEFAULT_COLOR1,
+        color2   = DEFAULT_COLOR2,
+        textAlign = DEFAULT_ALIGN,
+    }
+end
+
+local MY_TAG = myOwnTag()
 setTag(player, MY_TAG)
-
-local running = true
-
-local animConnection = RunService.Heartbeat:Connect(function()
-    local offset = ((os.clock() * 0.6) % 2) - 1
-    local camera = workspace.CurrentCamera
-    for gui, info in pairs(collapsing) do
-        if not gui.Parent then
-            collapsing[gui] = nil
-        elseif camera and info.head and info.head.Parent then
-            local distance = (camera.CFrame.Position - info.head.Position).Magnitude
-            local a = distance >= COLLAPSE_DISTANCE and 1 or 0
-            gui.Size = UDim2.new(0, FULL_W + (SQUARE - FULL_W) * a, 0, FULL_H)
-            info.logo.Position = UDim2.new(0, 5 + ((SQUARE - 46) / 2 - 5) * a, 0.5, 0)
-            for _, label in ipairs(info.texts) do
-                label.TextTransparency = a
-            end
-        end
-    end
-    for gradient in pairs(gradients) do
-        if gradient.Parent then
-            gradient.Offset = Vector2.new(offset, 0)
-        else
-            gradients[gradient] = nil
-        end
-    end
-end)
-
-local leavingConnection = Players.PlayerRemoving:Connect(function(leaving)
-    removeTag(leaving)
-end)
 
 local function firebasePath(jobId, userId)
     local base = FIREBASE_URL .. "/nametags/" .. HttpService:UrlEncode(jobId)
@@ -292,18 +368,17 @@ local function firebasePut(jobId, userId, data)
 
     local requestFunc = (syn and syn.request) or http_request or (fluxus and fluxus.request) or request
     if requestFunc then
-        requestFunc({
-            Url = url,
-            Method = "PUT",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body = body
-        })
-    else
-
-        pcall(function()
-            game:HttpGet(url)
+        local ok = pcall(function()
+            return requestFunc({
+                Url = url,
+                Method = "PUT",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = body,
+            })
         end)
+        return ok
     end
+    return false
 end
 
 local function firebaseGet(jobId)
@@ -318,44 +393,74 @@ local function firebaseGet(jobId)
     return (success and type(decoded) == "table") and decoded or {}
 end
 
+local running = true
+local freshStrikes = {}
+
 task.spawn(function()
     while running do
         pcall(function()
             local jobId = (game.JobId ~= "" and game.JobId) or tostring(game.PlaceId)
 
             firebasePut(jobId, player.UserId, {
-                t = cleanText(MY_TAG.title, ""),
-                s = cleanText(MY_TAG.subtitle, ""),
+                id = SCRIPT_ID,
+                t = cleanText(MY_TAG.title, "") ~= "" and cleanText(MY_TAG.title, "") or player.DisplayName,
+                s = cleanText(MY_TAG.subtitle, "") ~= "" and cleanText(MY_TAG.subtitle, "") or ("@" .. player.Name),
                 c1 = tostring(MY_TAG.color1),
                 c2 = tostring(MY_TAG.color2),
-                lastSeen = os.time()
+                img = MY_TAG.image,
+                imgF = MY_TAG.imageFile,
+                logo = MY_TAG.logo,
+                logoF = MY_TAG.logoFile,
+                align = MY_TAG.textAlign,
+                lastSeen = os.time(),
             })
 
             local users = firebaseGet(jobId)
-            local seen = {}
             local now = os.time()
 
+            local broadcasting = {}
             for userIdStr, data in pairs(users) do
                 local uid = tonumber(userIdStr)
-                if uid and type(data) == "table" then
-
-                    if not data.lastSeen or (now - data.lastSeen) <= 30 then
-                        local other = Players:GetPlayerByUserId(uid)
-                        if other and other ~= player then
-                            seen[other] = true
-                            setTag(other, {
-                                title = (data.t and data.t ~= "" and data.t) or other.DisplayName,
-                                subtitle = data.s or "",
-                                color1 = data.c1,
-                                color2 = data.c2,
-                            })
-                        end
+                if uid and type(data) == "table"
+                    and data.id == SCRIPT_ID
+                    and data.lastSeen
+                    and (now - data.lastSeen) <= FRESH_SECONDS
+                    and uid ~= player.UserId
+                then
+                    local other = Players:GetPlayerByUserId(uid)
+                    if other then
+                        broadcasting[other] = data
                     end
                 end
             end
 
+            for other, data in pairs(broadcasting) do
+                freshStrikes[other] = (freshStrikes[other] or 0) + 1
+
+                if freshStrikes[other] >= 2 then
+                    local custom = CUSTOM_TAGS[other.Name]
+                    setTag(other, custom or {
+                        title    = (data.t and data.t ~= "") and data.t or other.DisplayName,
+                        subtitle = (data.s and data.s ~= "") and data.s or ("@" .. other.Name),
+                        color1   = data.c1,
+                        color2   = data.c2,
+                        image    = data.img,
+                        imageFile = data.imgF,
+                        logo     = data.logo,
+                        logoFile = data.logoF,
+                        textAlign = data.align or "center",
+                    })
+                end
+            end
+
+            for other in pairs(freshStrikes) do
+                if not broadcasting[other] then
+                    freshStrikes[other] = nil
+                end
+            end
+
             for target in pairs(tags) do
-                if target ~= player and not seen[target] then
+                if target ~= player and not broadcasting[target] then
                     removeTag(target)
                 end
             end
@@ -364,12 +469,54 @@ task.spawn(function()
     end
 end)
 
+local animConnection = RunService.Heartbeat:Connect(function()
+    local offset = ((os.clock() * 0.6) % 2) - 1
+    local camera = workspace.CurrentCamera
+
+    for gradient in pairs(gradients) do
+        if gradient.Parent then
+            gradient.Offset = Vector2.new(offset, 0)
+        else
+            gradients[gradient] = nil
+        end
+    end
+
+    if camera then
+        for gui, info in pairs(collapsing) do
+            if not gui.Parent then
+                collapsing[gui] = nil
+            elseif info.head and info.head.Parent then
+                local distance = (camera.CFrame.Position - info.head.Position).Magnitude
+
+                local a = distance >= COLLAPSE_DISTANCE and 1 or 0
+
+                local width = FULL_W + (SQUARE - FULL_W) * a
+                gui.Size = UDim2.new(0, width, 0, FULL_H)
+
+                if info.hasLogo and info.logo then
+                    local logoLeft = LOGO_PAD + ((SQUARE - LOGO_SIZE) / 2 - LOGO_PAD) * a
+                    info.logo.Position = UDim2.new(0, logoLeft, 0.5, 0)
+                end
+
+                for _, label in ipairs(info.texts) do
+                    label.TextTransparency = a
+                end
+            end
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(leaving)
+    removeTag(leaving)
+    freshStrikes[leaving] = nil
+end)
+
 env[TAG_NAME] = function()
     running = false
     animConnection:Disconnect()
-    leavingConnection:Disconnect()
     for target in pairs(tags) do
         removeTag(target)
     end
     table.clear(collapsing)
+    table.clear(freshStrikes)
 end
