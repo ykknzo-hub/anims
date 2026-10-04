@@ -1,17 +1,20 @@
+-- lorez tags
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ykknzo-hub/anims/refs/heads/main/lznt"))()
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
-local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app"
+local FIREBASE_URL = "https://krimsonx-nametags-default-rtdb.firebaseio.com/"
 local FIREBASE_SECRET = ""
 local PING_SECONDS = 8
 local FRESH_SECONDS = 20
-local SCRIPT_ID = "kxnzie_nametag_v1"
+local SCRIPT_ID = "krimsonx_nametag_v1"
 
 local CUSTOM_TAGS = {
     ["kryliczx"] = {
-        title    = "kryliczx",
+        title    = "kxnzie",
         subtitle = "@kryliczx",
         color1   = "#000000",
         color2   = "#ffffff",
@@ -36,6 +39,7 @@ local DEFAULT_LOGO_FILE = "nametag_logo_default.png"
 local CARD_COLOR = Color3.fromRGB(16, 9, 24)
 local HEIGHT = 2.6
 local TAG_NAME = "__kxnzie_nametag"
+local TOGGLE_NAME = "__kxnzie_nametag_toggle"
 
 local COLLAPSE_DISTANCE = 50
 local FULL_W, FULL_H, SQUARE = 150, 50, 50
@@ -54,6 +58,9 @@ local env = (getgenv and getgenv()) or _G
 if type(env[TAG_NAME]) == "function" then
     pcall(env[TAG_NAME])
 end
+
+-- nametags on/off (driven by the hub's Settings toggle via env[TOGGLE_NAME])
+local enabled = true
 
 local assetCache = {}
 
@@ -154,6 +161,7 @@ local function buildTag(head, data, target)
     gui.Size = UDim2.new(0, FULL_W, 0, FULL_H)
     gui.StudsOffsetWorldSpace = Vector3.new(0, HEIGHT, 0)
     gui.Active = true
+    gui.Enabled = enabled
     gui.Parent = player:WaitForChild("PlayerGui")
 
     local card = Instance.new("Frame")
@@ -399,6 +407,9 @@ local freshStrikes = {}
 task.spawn(function()
     while running do
         pcall(function()
+            -- toggled off: stop broadcasting and polling
+            if not enabled then return end
+
             local jobId = (game.JobId ~= "" and game.JobId) or tostring(game.PlaceId)
 
             firebasePut(jobId, player.UserId, {
@@ -470,6 +481,8 @@ task.spawn(function()
 end)
 
 local animConnection = RunService.Heartbeat:Connect(function()
+    if not enabled then return end
+
     local offset = ((os.clock() * 0.6) % 2) - 1
     local camera = workspace.CurrentCamera
 
@@ -506,17 +519,34 @@ local animConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
-Players.PlayerRemoving:Connect(function(leaving)
+local removingConnection = Players.PlayerRemoving:Connect(function(leaving)
     removeTag(leaving)
     freshStrikes[leaving] = nil
 end)
 
+-- toggle: env.__kxnzie_nametag_toggle(true/false)
+env[TOGGLE_NAME] = function(state)
+    enabled = state and true or false
+
+    local count = 0
+    for _, child in ipairs(player:WaitForChild("PlayerGui"):GetChildren()) do
+        if child.Name == TAG_NAME and child:IsA("BillboardGui") then
+            child.Enabled = enabled
+            count = count + 1
+        end
+    end
+    print("lorez nametags " .. (enabled and "on" or "off") .. " (" .. count .. " tags)")
+end
+
 env[TAG_NAME] = function()
     running = false
+    enabled = false
     animConnection:Disconnect()
+    removingConnection:Disconnect()
     for target in pairs(tags) do
         removeTag(target)
     end
     table.clear(collapsing)
     table.clear(freshStrikes)
+    env[TOGGLE_NAME] = nil
 end
