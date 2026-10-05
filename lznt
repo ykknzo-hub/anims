@@ -5,26 +5,13 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
+local WEBSITE_TAGS_URL = "https://lorezmain.kenzielimonn.workers.dev/tags.json"
+
 local FIREBASE_URL = "https://nametags-11467-default-rtdb.europe-west1.firebasedatabase.app"
 local FIREBASE_SECRET = ""
 local PING_SECONDS = 8
 local FRESH_SECONDS = 20
 local SCRIPT_ID = "kxnzie_nametag_v1"
-
-local CUSTOM_TAGS = {
-    ["kryliczx"] = {
-        title    = "kryliczx",
-        subtitle = "@kryliczx",
-        color1   = "#000000",
-        color2   = "#ffffff",
-        image    = "https://i.ibb.co/v4RLgTjH/Damon-Salvatore.jpg",
-        imageFile = "Damon-Salvatore.jpg",
-        logo     = "none",
-        logoFile = "none",
-        textAlign = "left",
-    },
-    -- i add more here so i remember
-}
 
 local DEFAULT_COLOR1 = "#8c00ffff"
 local DEFAULT_COLOR2 = "#ff9100ff"
@@ -320,7 +307,6 @@ end
 local function setTag(target, data)
     local entry = tags[target]
     if entry and entry.key == dataKey(data) and entry.gui and entry.gui.Parent then
-        -- still valid, just make sure Adornee is correct
         local char = target.Character
         local head = char and char:FindFirstChild("Head")
         if head and entry.gui.Adornee ~= head then
@@ -345,7 +331,6 @@ local function setTag(target, data)
             end
             current.gui = buildTag(head, data, target)
 
-            -- also watch for head being replaced (common in morphs/clones)
             if current.headConn then
                 current.headConn:Disconnect()
             end
@@ -373,19 +358,46 @@ local function setTag(target, data)
     end
 end
 
-local function myOwnTag()
-    local custom = CUSTOM_TAGS[player.Name]
-    if custom then return custom end
+local function fetchWebsiteTags()
+    local ok, result = pcall(function()
+        return game:HttpGet(WEBSITE_TAGS_URL)
+    end)
+    if not ok or not result or result == "null" then return {} end
+    local success, decoded = pcall(function()
+        return HttpService:JSONDecode(result)
+    end)
+    return (success and type(decoded) == "table") and decoded or {}
+end
+
+local function makeTagData(username, displayName, webData)
+    if type(webData) == "table" then
+        return {
+            title     = webData.title or displayName,
+            subtitle  = webData.subtitle or ("@" .. username),
+            color1    = webData.color1 or DEFAULT_COLOR1,
+            color2    = webData.color2 or DEFAULT_COLOR2,
+            image     = webData.image or DEFAULT_BG_URL,
+            imageFile = webData.imageFile or DEFAULT_BG_FILE,
+            logo      = webData.logo or DEFAULT_LOGO_URL,
+            logoFile  = webData.logoFile or DEFAULT_LOGO_FILE,
+            textAlign = webData.textAlign or DEFAULT_ALIGN,
+        }
+    end
     return {
-        title    = player.DisplayName,
-        subtitle = "@" .. player.Name,
-        color1   = DEFAULT_COLOR1,
-        color2   = DEFAULT_COLOR2,
+        title     = displayName,
+        subtitle  = "@" .. username,
+        color1    = DEFAULT_COLOR1,
+        color2    = DEFAULT_COLOR2,
+        image     = DEFAULT_BG_URL,
+        imageFile = DEFAULT_BG_FILE,
+        logo      = DEFAULT_LOGO_URL,
+        logoFile  = DEFAULT_LOGO_FILE,
         textAlign = DEFAULT_ALIGN,
     }
 end
 
-local MY_TAG = myOwnTag()
+-- initial self tag (will be updated from website)
+local MY_TAG = makeTagData(player.Name, player.DisplayName, nil)
 setTag(player, MY_TAG)
 
 -- continuous local-player tag health check (handles morphs / avatar switches / clones)
@@ -399,10 +411,7 @@ task.spawn(function()
             local char = player.Character
             local head = char and char:FindFirstChild("Head")
 
-            if not head then
-                -- wait for head
-            elseif not entry.gui or not entry.gui.Parent or entry.gui.Adornee ~= head then
-                -- force rebuild
+            if head and (not entry.gui or not entry.gui.Parent or entry.gui.Adornee ~= head) then
                 if entry.gui then
                     entry.gui:Destroy()
                 end
@@ -461,6 +470,12 @@ local freshStrikes = {}
 task.spawn(function()
     while running do
         pcall(function()
+            local websiteTags = fetchWebsiteTags()
+
+            -- update own tag from website
+            MY_TAG = makeTagData(player.Name, player.DisplayName, websiteTags[player.Name])
+            setTag(player, MY_TAG)
+
             local jobId = (game.JobId ~= "" and game.JobId) or tostring(game.PlaceId)
 
             firebasePut(jobId, player.UserId, {
@@ -500,18 +515,25 @@ task.spawn(function()
                 freshStrikes[other] = (freshStrikes[other] or 0) + 1
 
                 if freshStrikes[other] >= 2 then
-                    local custom = CUSTOM_TAGS[other.Name]
-                    setTag(other, custom or {
-                        title    = (data.t and data.t ~= "") and data.t or other.DisplayName,
-                        subtitle = (data.s and data.s ~= "") and data.s or ("@" .. other.Name),
-                        color1   = data.c1,
-                        color2   = data.c2,
-                        image    = data.img,
-                        imageFile = data.imgF,
-                        logo     = data.logo,
-                        logoFile = data.logoF,
-                        textAlign = data.align or "center",
-                    })
+                    -- prefer website data, fall back to what they broadcasted
+                    local webData = websiteTags[other.Name]
+                    local tagData
+                    if type(webData) == "table" then
+                        tagData = makeTagData(other.Name, other.DisplayName, webData)
+                    else
+                        tagData = {
+                            title     = (data.t and data.t ~= "") and data.t or other.DisplayName,
+                            subtitle  = (data.s and data.s ~= "") and data.s or ("@" .. other.Name),
+                            color1    = data.c1 or DEFAULT_COLOR1,
+                            color2    = data.c2 or DEFAULT_COLOR2,
+                            image     = data.img or DEFAULT_BG_URL,
+                            imageFile = data.imgF or DEFAULT_BG_FILE,
+                            logo      = data.logo or DEFAULT_LOGO_URL,
+                            logoFile  = data.logoF or DEFAULT_LOGO_FILE,
+                            textAlign = data.align or DEFAULT_ALIGN,
+                        }
+                    end
+                    setTag(other, tagData)
                 end
             end
 
