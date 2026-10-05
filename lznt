@@ -1,5 +1,3 @@
--- lorez tags
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -154,7 +152,7 @@ local function buildTag(head, data, target)
     card.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 4)
     corner.Parent = card
 
     if bgAsset then
@@ -166,7 +164,7 @@ local function buildTag(head, data, target)
         bg.ZIndex = 1
         bg.Parent = card
         local bgCorner = Instance.new("UICorner")
-        bgCorner.CornerRadius = UDim.new(0, 10)
+        bgCorner.CornerRadius = UDim.new(0, 4)
         bgCorner.Parent = bg
     end
 
@@ -396,11 +394,9 @@ local function makeTagData(username, displayName, webData)
     }
 end
 
--- initial self tag (will be updated from website)
 local MY_TAG = makeTagData(player.Name, player.DisplayName, nil)
 setTag(player, MY_TAG)
 
--- continuous local-player tag health check (handles morphs / avatar switches / clones)
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -472,7 +468,6 @@ task.spawn(function()
         pcall(function()
             local websiteTags = fetchWebsiteTags()
 
-            -- update own tag from website
             MY_TAG = makeTagData(player.Name, player.DisplayName, websiteTags[player.Name])
             setTag(player, MY_TAG)
 
@@ -515,7 +510,7 @@ task.spawn(function()
                 freshStrikes[other] = (freshStrikes[other] or 0) + 1
 
                 if freshStrikes[other] >= 2 then
-                    -- prefer website data, fall back to what they broadcasted
+
                     local webData = websiteTags[other.Name]
                     local tagData
                     if type(webData) == "table" then
