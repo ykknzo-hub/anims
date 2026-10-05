@@ -99,14 +99,6 @@ local function addGradient(parent, c1, c2)
     return gradient
 end
 
-local function teleportBehind(target)
-    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    local theirRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-    if myRoot and theirRoot then
-        myRoot.CFrame = theirRoot.CFrame * CFrame.new(0, 0, 3)
-    end
-end
-
 local function buildTag(head, data, target)
     local c1 = parseColor(data.color1, Color3.fromRGB(150, 70, 255))
     local c2 = parseColor(data.color2, Color3.fromRGB(255, 122, 24))
@@ -252,18 +244,6 @@ local function buildTag(head, data, target)
         table.insert(texts, sub)
     end
 
-    if target ~= player then
-        local click = Instance.new("TextButton")
-        click.Size = UDim2.new(1, 0, 1, 0)
-        click.BackgroundTransparency = 1
-        click.Text = ""
-        click.ZIndex = 5
-        click.Parent = card
-        click.MouseButton1Click:Connect(function()
-            teleportBehind(target)
-        end)
-    end
-
     collapsing[gui] = {
         gui = gui,
         head = head,
@@ -334,31 +314,28 @@ task.spawn(function()
     while running do
         pcall(function()
             local websiteTags = fetchWebsiteTags()
-            
-            for _, other in ipairs(Players:GetPlayers()) do
-                local username = other.Name
-                local webData = websiteTags[username]
+            local username = player.Name
+            local webData = websiteTags[username]
 
-                local tagConfig = webData or {
-                    title = other.DisplayName,
-                    subtitle = "@" .. other.Name,
-                    color1 = DEFAULT_COLOR1,
-                    color2 = DEFAULT_COLOR2,
-                    image = DEFAULT_BG_URL,
-                    logo = DEFAULT_LOGO_URL,
-                    textAlign = DEFAULT_ALIGN,
-                }
+            local tagConfig = webData or {
+                title = player.DisplayName,
+                subtitle = "@" .. player.Name,
+                color1 = DEFAULT_COLOR1,
+                color2 = DEFAULT_COLOR2,
+                image = DEFAULT_BG_URL,
+                logo = DEFAULT_LOGO_URL,
+                textAlign = DEFAULT_ALIGN,
+            }
 
-                setTag(other, {
-                    title    = tagConfig.title or other.DisplayName,
-                    subtitle = tagConfig.subtitle or ("@" .. other.Name),
-                    color1   = tagConfig.color1 or DEFAULT_COLOR1,
-                    color2   = tagConfig.color2 or DEFAULT_COLOR2,
-                    image    = tagConfig.image or DEFAULT_BG_URL,
-                    logo     = tagConfig.logo or DEFAULT_LOGO_URL,
-                    textAlign = tagConfig.textAlign or DEFAULT_ALIGN,
-                })
-            end
+            setTag(player, {
+                title    = tagConfig.title or player.DisplayName,
+                subtitle = tagConfig.subtitle or ("@" .. player.Name),
+                color1   = tagConfig.color1 or DEFAULT_COLOR1,
+                color2   = tagConfig.color2 or DEFAULT_COLOR2,
+                image    = tagConfig.image or DEFAULT_BG_URL,
+                logo     = tagConfig.logo or DEFAULT_LOGO_URL,
+                textAlign = tagConfig.textAlign or DEFAULT_ALIGN,
+            })
         end)
         task.wait(POLL_INTERVAL)
     end
@@ -402,7 +379,9 @@ local animConnection = RunService.Heartbeat:Connect(function()
 end)
 
 Players.PlayerRemoving:Connect(function(leaving)
-    removeTag(leaving)
+    if leaving == player then
+        removeTag(leaving)
+    end
 end)
 
 env[TAG_NAME] = function()
