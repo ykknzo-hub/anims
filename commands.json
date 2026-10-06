@@ -1,0 +1,35 @@
+{
+  "prefix": ".",
+  "urls": {
+    "antivc": "http://pastebin.com/raw/k3FFB5u9",
+    "reanimation": "https://pastebin.com/raw/5caNh5uL",
+    "infiniteYield": "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source",
+    "tagScript": "https://raw.githubusercontent.com/ykknzo-hub/anims/refs/heads/main/lznt"
+  },
+  "commands": [
+    { "name": "antivc", "kind": "url", "category": "Buttons", "urlKey": "antivc" },
+    { "name": "reanimation", "kind": "url", "category": "Buttons", "urlKey": "reanimation" },
+    { "name": "rejoin", "kind": "builtin", "category": "Buttons" },
+    { "name": "tpreset", "kind": "builtin", "category": "Buttons" },
+    { "name": "reset", "kind": "builtin", "category": "Buttons" },
+    { "name": "headsit", "kind": "builtin", "category": "Boxes" },
+    { "name": "speed", "kind": "builtin", "category": "Boxes" },
+    { "name": "jump", "kind": "builtin", "category": "Boxes" },
+    { "name": "goto", "kind": "builtin", "category": "Boxes" },
+    { "name": "fov", "kind": "builtin", "category": "Boxes" },
+    { "name": "clicktp", "kind": "builtin", "category": "Boxes" },
+    { "name": "platform", "kind": "builtin", "category": "Toggles" },
+    { "name": "ftp", "kind": "builtin", "category": "Toggles" },
+    { "name": "noclip", "kind": "builtin", "category": "Toggles" },
+    { "name": "infjump", "kind": "builtin", "category": "Toggles" },
+    { "name": "infzoom", "kind": "builtin", "category": "Toggles" },
+    { "name": "fullbright", "kind": "builtin", "category": "Toggles" }
+  ],
+  "externals": [
+    { "name": "Infinite Yield", "urlKey": "infiniteYield" },
+    { "name": "sl8", "url": "https://sl8ght.xyz/" },
+    { "name": "Novoline", "url": "https://novoline.pro/" },
+    { "name": "AK ADMIN", "url": "https://absent.wtf/AKADMIN.lua" },
+    { "name": "NEMESIS", "url": "https://usenms.xyz/loader.lua" }
+  ]
+}
