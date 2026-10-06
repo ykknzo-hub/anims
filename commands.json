@@ -10,7 +10,7 @@
   "commands": [
     { "name": "antivc", "kind": "url", "category": "Buttons", "urlKey": "antivc" },
     { "name": "reanimation", "kind": "url", "category": "Buttons", "urlKey": "reanimation" },
-    { "name": "vip-emotes", "kind": "url", "category": "Buttons" },
+    { "name": "vip-emotes", "kind": "url", "category": "Buttons", "urlKey": "vip-emotes" },
     { "name": "rejoin", "kind": "builtin", "category": "Buttons" },
     { "name": "tpreset", "kind": "builtin", "category": "Buttons" },
     { "name": "reset", "kind": "builtin", "category": "Buttons" },
