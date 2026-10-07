@@ -12,12 +12,12 @@ local PING_SECONDS = 8
 local FRESH_SECONDS = 20
 local SCRIPT_ID = "kxnzie_nametag_v1"
 
-local DEFAULT_COLOR1 = "#8c00ffff"
-local DEFAULT_COLOR2 = "#ff9100ff"
-local DEFAULT_ALIGN  = "center"
+local DEFAULT_COLOR1 = "#000000"
+local DEFAULT_COLOR2 = "#ffffff"
+local DEFAULT_ALIGN  = "left"
 
-local DEFAULT_BG_URL   = "https://i.ibb.co/QFjgW4Yp/lorez-bg.jpg"
-local DEFAULT_BG_FILE  = "nametag_bg_default.jpg"
+local DEFAULT_BG_URL   = "https://i.ibb.co/DDGzwbq8/1164838.jpg"
+local DEFAULT_BG_FILE  = "nametag_bg_new.jpg"
 local DEFAULT_LOGO_URL = "https://i.ibb.co/hFRS0QcP/l-gogo.png"
 local DEFAULT_LOGO_FILE = "nametag_logo_default.png"
 
