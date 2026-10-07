@@ -38,6 +38,10 @@ local SUB_Y_OFFSET   = 9
 
 local LEFT_PADDING = 10
 
+-- Roblox downsizes images larger than this on either axis. Sprite sheets
+-- bigger than this get their frame rects scaled to match.
+local MAX_IMAGE_DIM = 1024
+
 local env = (getgenv and getgenv()) or _G
 if type(env[TAG_NAME]) == "function" then
     pcall(env[TAG_NAME])
@@ -46,7 +50,7 @@ end
 local assetCache = {}
 
 local function loadAsset(file, url)
-    if not file or not url or url == "" then return nil end
+    if not file or not url or url == "" or url == "none" then return nil end
     local cacheKey = file .. "|" .. url
     if assetCache[cacheKey] ~= nil then
         return assetCache[cacheKey]
@@ -87,6 +91,62 @@ local function alignToTextX(align)
     if align == "left" then return Enum.TextXAlignment.Left end
     if align == "right" then return Enum.TextXAlignment.Right end
     return Enum.TextXAlignment.Center
+end
+
+-- ---------- Sprite sheet support ----------
+-- Meta format (written by the website's GIF -> spritesheet converter):
+-- { frames, cols, rows, fps, frameWidth, frameHeight }
+
+local sprites = {} -- ImageLabel -> { meta, scale, last }
+
+local function normalizeSprite(meta)
+    if type(meta) ~= "table" then return nil end
+    local frames = tonumber(meta.frames)
+    local cols = tonumber(meta.cols)
+    local rows = tonumber(meta.rows)
+    local fw = tonumber(meta.frameWidth)
+    local fh = tonumber(meta.frameHeight)
+    local fps = tonumber(meta.fps) or 10
+    if not (frames and cols and rows and fw and fh) then return nil end
+    if frames < 1 or cols < 1 or rows < 1 or fw < 1 or fh < 1 then return nil end
+    if fps < 1 then fps = 1 end
+    return {
+        frames = math.floor(frames),
+        cols = math.floor(cols),
+        rows = math.floor(rows),
+        fps = fps,
+        frameWidth = fw,
+        frameHeight = fh,
+    }
+end
+
+local function spriteKey(meta)
+    if type(meta) ~= "table" then return "-" end
+    return table.concat({
+        tostring(meta.frames), tostring(meta.cols), tostring(meta.rows),
+        tostring(meta.fps), tostring(meta.frameWidth), tostring(meta.frameHeight),
+    }, ",")
+end
+
+local function setSpriteFrame(label, info, frame)
+    local meta = info.meta
+    local col = frame % meta.cols
+    local row = math.floor(frame / meta.cols)
+    local s = info.scale
+    label.ImageRectSize = Vector2.new(meta.frameWidth * s, meta.frameHeight * s)
+    label.ImageRectOffset = Vector2.new(col * meta.frameWidth * s, row * meta.frameHeight * s)
+    info.last = frame
+end
+
+local function applySprite(label, rawMeta)
+    local meta = normalizeSprite(rawMeta)
+    if not meta then return end
+    local sheetW = meta.frameWidth * meta.cols
+    local sheetH = meta.frameHeight * meta.rows
+    local scale = math.min(1, MAX_IMAGE_DIM / math.max(sheetW, sheetH))
+    local info = { meta = meta, scale = scale, last = -1 }
+    sprites[label] = info
+    setSpriteFrame(label, info, 0)
 end
 
 local gradients = {}
@@ -167,6 +227,7 @@ local function buildTag(head, data, target)
         local bgCorner = Instance.new("UICorner")
         bgCorner.CornerRadius = UDim.new(0, 4)
         bgCorner.Parent = bg
+        applySprite(bg, data.imageSprite)
     end
 
     local stroke = Instance.new("UIStroke")
@@ -188,6 +249,7 @@ local function buildTag(head, data, target)
         logo.ScaleType = Enum.ScaleType.Fit
         logo.ZIndex = 2
         logo.Parent = card
+        applySprite(logo, data.logoSprite)
         logoWidth = LOGO_PAD + LOGO_SIZE + 4
     end
 
@@ -300,6 +362,8 @@ local function dataKey(data)
         tostring(data.logo),
         tostring(data.logoFile),
         tostring(data.textAlign),
+        spriteKey(data.imageSprite),
+        spriteKey(data.logoSprite),
     }, "|")
 end
 
@@ -380,6 +444,8 @@ local function makeTagData(username, displayName, webData)
             logo      = webData.logo or DEFAULT_LOGO_URL,
             logoFile  = webData.logoFile or DEFAULT_LOGO_FILE,
             textAlign = webData.textAlign or DEFAULT_ALIGN,
+            imageSprite = webData.image and webData.imageSprite or nil,
+            logoSprite  = webData.logo and webData.logoSprite or nil,
         }
     end
     return {
@@ -482,8 +548,10 @@ task.spawn(function()
                 c2 = tostring(MY_TAG.color2),
                 img = MY_TAG.image,
                 imgF = MY_TAG.imageFile,
+                imgS = MY_TAG.imageSprite,
                 logo = MY_TAG.logo,
                 logoF = MY_TAG.logoFile,
+                logoS = MY_TAG.logoSprite,
                 align = MY_TAG.textAlign,
                 lastSeen = os.time(),
             })
@@ -527,6 +595,8 @@ task.spawn(function()
                             logo      = data.logo or DEFAULT_LOGO_URL,
                             logoFile  = data.logoF or DEFAULT_LOGO_FILE,
                             textAlign = data.align or DEFAULT_ALIGN,
+                            imageSprite = data.imgS,
+                            logoSprite  = data.logoS,
                         }
                     end
                     setTag(other, tagData)
@@ -550,7 +620,8 @@ task.spawn(function()
 end)
 
 local animConnection = RunService.Heartbeat:Connect(function()
-    local offset = ((os.clock() * 0.6) % 2) - 1
+    local clock = os.clock()
+    local offset = ((clock * 0.6) % 2) - 1
     local camera = workspace.CurrentCamera
 
     for gradient in pairs(gradients) do
@@ -558,6 +629,17 @@ local animConnection = RunService.Heartbeat:Connect(function()
             gradient.Offset = Vector2.new(offset, 0)
         else
             gradients[gradient] = nil
+        end
+    end
+
+    for label, info in pairs(sprites) do
+        if not label.Parent then
+            sprites[label] = nil
+        else
+            local frame = math.floor(clock * info.meta.fps) % info.meta.frames
+            if frame ~= info.last then
+                setSpriteFrame(label, info, frame)
+            end
         end
     end
 
@@ -599,4 +681,5 @@ env[TAG_NAME] = function()
     end
     table.clear(collapsing)
     table.clear(freshStrikes)
+    table.clear(sprites)
 end
