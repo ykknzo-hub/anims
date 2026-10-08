@@ -5,14 +5,12 @@
     "reanimation": "https://pastebin.com/raw/uja5z56p",
     "infiniteYield": "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source",
     "tagScript": "https://raw.githubusercontent.com/ykknzo-hub/anims/refs/heads/main/lznt",
-    "vip-emotes": "https://pastebin.com/raw/jxVLT5db",
-    "inf-baseplate": "https://pastebin.com/raw/rHDHYaNh"
+    "vip-emotes": "https://pastebin.com/raw/jxVLT5db"
   },
   "commands": [
     { "name": "antivc", "kind": "url", "category": "Buttons", "urlKey": "antivc" },
     { "name": "reanimation", "kind": "url", "category": "Buttons", "urlKey": "reanimation" },
     { "name": "vip-emotes", "kind": "url", "category": "Buttons", "urlKey": "vip-emotes" },
-    { "name": "inf-baseplate", "kind": "url", "category": "Buttons", "urlKey": "inf-baseplate" },
     { "name": "rejoin", "kind": "builtin", "category": "Buttons" },
     { "name": "tpreset", "kind": "builtin", "category": "Buttons" },
     { "name": "reset", "kind": "builtin", "category": "Buttons" },
@@ -22,7 +20,6 @@
     { "name": "goto", "kind": "builtin", "category": "Boxes" },
     { "name": "fov", "kind": "builtin", "category": "Boxes" },
     { "name": "clicktp", "kind": "builtin", "category": "Boxes" },
-    { "name": "platform", "kind": "builtin", "category": "Toggles" },
     { "name": "ftp", "kind": "builtin", "category": "Toggles" },
     { "name": "noclip", "kind": "builtin", "category": "Toggles" },
     { "name": "infjump", "kind": "builtin", "category": "Toggles" },
